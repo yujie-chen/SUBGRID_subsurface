@@ -49,10 +49,9 @@ PROGRAM SUBGRID_MODEL
 #    endif
 # endif
 
-
 # if defined (DEBUG)
 #    if defined (PARALLEL)
-       IF(myid==0) WRITE(*,*) 'CHECK_EXCH_SUBGRID'     
+       IF(myid==0) WRITE(*,*) ' '
 #    else   
        WRITE(*,*) 'CHECK_EXCH_SUBGRID'
 #    endif
@@ -60,24 +59,18 @@ PROGRAM SUBGRID_MODEL
 
 # if defined (SUBSURFACE)
     CALL UPDATE_MASKS  ! yjchen added this line 08/08/2018
-    CALL SUBSURFACE_INITIAL
-
-# if defined (DEBUG)
-#    if defined (PARALLEL)
-       IF(myid==0) WRITE(*,*) 'SUBSURFACE_INITIAL'     
-#    else   
-       WRITE(*,*) 'SUBSURFACE_INITIAL'
-#    endif
-# endif
-
+!   CALL SUBSURFACE_INITIAL   ! ORIGINAL
+    CALL UPDATE_GROUND_MASK_ETA    !  Added by YUJIE CHEN 03/04/2019
+    CALL UPDATE_MASK_GROUNDS  !  Added by YUJIE CHEN 03/04/2019
 # endif
 ! subsurface
-
-
 
   DO WHILE (TIME<TOTAL_TIME) ! begin main loop
 
    CALL UPDATE_MASKS
+   CALL UPDATE_GROUND_MASK_ETA    !  Added by YUJIE CHEN 03/04/2019
+   CALL UPDATE_MASK_GROUNDS  ! YUJIE CHEN added this line 02/28/2019
+
 
 # if defined (DEBUG)
 #    if defined (PARALLEL)
@@ -238,25 +231,30 @@ PROGRAM SUBGRID_MODEL
 # endif
 
    ! update porosity h
-   CALL UPDATE_SUBGRID
-
 # if defined (SUBSURFACE)
-     DO J=1,Nloc
-     DO I=1,Mloc
+   CALL UPDATE_SUBGRID_SUBSURFACE
+# else
+   CALL UPDATE_SUBGRID
+# endif
+
+!# if defined (SUBSURFACE)
+!     DO J=1,Nloc
+!     DO I=1,Mloc
 !        IF (MASK(I,J)==0)THEN
 !          ETA(I,J) = ETA_ground(I,J)
 !        ENDIF
-        IF (MASK(I,J)==1)THEN
-          ETA_ground(I,J) = ETA(I,J)
-        ENDIF
-     ENDDO
-     ENDDO
+!!        IF (MASK(I,J)==1)THEN
+!!          ETA_ground(I,J) = ETA(I,J)
+!!        ENDIF
+!     ENDDO
+!     ENDDO
 
-# if defined (PARALLEL)
-     CALL PHI_EXCH_1(ETA_ground)
-# endif
+!# if defined (PARALLEL)
+! !    CALL PHI_EXCH_1(ETA_ground)
+!      CALL PHI_EXCH_1(ETA)
+!# endif
 
-# endif
+!# endif
 
 # if defined (DEBUG)
 #    if defined (PARALLEL)
@@ -592,6 +590,8 @@ SUBROUTINE UPDATE_MASKS
    ENDDO
   ENDIF  ! end obstacle
 
+
+
 ! add this 2016-01-17
 ! I found this is un-necessary! 2016-01-20
 # if defined(PARALLEL)
@@ -656,6 +656,154 @@ END SUBROUTINE UPDATE_MASKS
 # endif
 ! end parallel
 
+
+
+!!! Added by YUJIE CHEN
+
+# if defined(SUBSURFACE)
+
+# if defined (PARALLEL)
+
+SUBROUTINE UPDATE_MASK_GROUNDS
+    USE GLOBAL
+    USE SUBSURFACE_MODULE
+    IMPLICIT NONE
+
+if ( n_west .eq. MPI_PROC_NULL.and.n_east .ne. MPI_PROC_NULL ) then
+    DO J=1,Nloc
+    DO I=Ibeg+1,Mloc1
+    IF(Du_ground(I,J)>MinDepth)THEN
+        MASKu_GROUND(I,J)=1
+    ELSE
+        MASKu_GROUND(I,J)=0
+    ENDIF
+    ENDDO
+    ENDDO
+else if ( n_west .eq. MPI_PROC_NULL.and.n_east .eq. MPI_PROC_NULL ) then
+    DO J=1,Nloc
+    DO I=Ibeg+1,Iend
+    IF(Du_ground(I,J)>MinDepth)THEN
+        MASKu_GROUND(I,J)=1
+    ELSE
+        MASKu_GROUND(I,J)=0
+    ENDIF
+    ENDDO
+    ENDDO
+else if ( n_west .ne. MPI_PROC_NULL.and.n_east .eq. MPI_PROC_NULL ) then
+    DO J=1,Nloc
+    DO I=1,Iend
+    IF(Du_ground(I,J)>MinDepth)THEN
+        MASKu_GROUND(I,J)=1
+    ELSE
+        MASKu_GROUND(I,J)=0
+    ENDIF
+    ENDDO
+    ENDDO
+
+else
+    DO J=1,Nloc
+    DO I=1,Mloc1
+    IF(Du_ground(I,J)>MinDepth)THEN
+        MASKu_GROUND(I,J)=1
+    ELSE
+        MASKu_GROUND(I,J)=0
+    ENDIF
+    ENDDO
+    ENDDO
+
+endif
+
+
+if ( n_suth .eq. MPI_PROC_NULL.and.n_nrth .ne. MPI_PROC_NULL ) then
+    DO J=Jbeg+1,Nloc1
+    DO I=1,Mloc
+    IF(Dv_ground(I,J)>MinDepth)THEN
+        MASKv_GROUND(I,J)=1
+    ELSE
+        MASKv_GROUND(I,J)=0
+    ENDIF
+    ENDDO
+    ENDDO
+
+else if ( n_suth .eq. MPI_PROC_NULL.and.n_nrth .eq. MPI_PROC_NULL ) then
+
+    DO J=Jbeg+1,Jend
+    DO I=1,Mloc
+        IF(Dv_ground(I,J)>MinDepth)THEN
+        MASKv_GROUND(I,J)=1
+        ELSE
+        MASKv_GROUND(I,J)=0
+        ENDIF
+    ENDDO
+    ENDDO
+
+else if ( n_suth .ne. MPI_PROC_NULL.and.n_nrth .eq. MPI_PROC_NULL ) then
+
+    DO J=1,Jend
+    DO I=1,Mloc
+        IF(Dv_ground(I,J)>MinDepth)THEN
+        MASKv_GROUND(I,J)=1
+        ELSE
+        MASKv_GROUND(I,J)=0
+        ENDIF
+    ENDDO
+    ENDDO
+
+else
+    DO J=1,Nloc1
+    DO I=1,Mloc
+        IF(Dv_ground(I,J)>MinDepth)THEN
+        MASKv_GROUND(I,J)=1
+        ELSE
+        MASKv_GROUND(I,J)=0
+        ENDIF
+    ENDDO
+    ENDDO
+endif
+
+
+# if defined(PARALLEL)
+    CALL phi_int_exch_2(MASKu_GROUND)
+    CALL phi_int_exch_3(MASKv_GROUND)
+# endif
+
+
+END SUBROUTINE UPDATE_MASK_GROUNDS
+
+
+# else
+! not parallel
+SUBROUTINE UPDATE_MASK_GROUNDS
+    USE GLOBAL
+    USE SUBSURFACE_MODULE
+    IMPLICIT NONE
+
+    DO J=1,Nloc
+    DO I=Ibeg+1,Iend1-1
+        IF(Du_ground(I,J)>MinDepth)THEN
+        MASKu_GROUND(I,J)=1
+        ELSE
+        MASKu_GROUND(I,J)=0
+        ENDIF
+    ENDDO
+    ENDDO
+
+
+    DO J=Jbeg+1,Jend1-1
+    DO I=1,Mloc
+        IF(Dv_ground(I,J)>MinDepth)THEN
+        MASKv_GROUND(I,J)=1
+        ELSE
+        MASKv_GROUND(I,J)=0
+        ENDIF
+    ENDDO
+    ENDDO
+
+END SUBROUTINE UPDATE_MASK_GROUNDS
+# endif
+! end parallel
+# endif
+! end subsurface
 
 
 SUBROUTINE STRUCTURE_CONDITIONS
@@ -753,11 +901,12 @@ SUBROUTINE CALCULATE_H_PQ_UV
   DO I=Ibeg,Iend1
 # if defined (SUBSURFACE) 
 !$$$
-               IF(MASKu(I,J)==0)THEN
+!               IF(MASKu(I,J)==0)THEN
+               IF(MASKu(I,J)==0 .AND. MASKu_GROUND(I,J)==1)THEN
+                 ! Modified by YUJIE CHEN
                  P(I,J)=P_ground(I,J)
                  U(I,J) =P(I,J)/MAX(MinDepth,Du_ground(I,J))
                ELSE
-
                  Pgrad=ETA(I,J)-ETA(I-1,J)
                  IF(MASK(I-1,J)<1) Pgrad=MAX(ZERO,ETA(I,J)-EtaScreen(I-1,J)) 
                  IF(MASK(I,J)<1) Pgrad=MIN(ZERO,EtaScreen(I,J)-Eta(I-1,J))       
@@ -781,7 +930,9 @@ SUBROUTINE CALCULATE_H_PQ_UV
   DO J=Jbeg,Jend1
   DO I=Ibeg,Iend
 # if defined (SUBSURFACE)
-               IF(MASKv(I,J)==0)THEN
+ !              IF(MASKv(I,J)==0)THEN
+               IF(MASKv(I,J)==0 .AND.MASKv_GROUND(I,J)==1)THEN
+                 ! Modified by YUJIE CHEN
                  Q(I,J)=Q_ground(I,J)
                  V(I,J) =Q(I,J)/MAX(MinDepth,Dv_ground(I,J))
                ELSE
@@ -856,6 +1007,9 @@ END SUBROUTINE CALCULATE_H_PQ_UV
 
 SUBROUTINE FILLIN_BOUNDARY_GHOST
   USE GLOBAL
+# if defined (SUBSURFACE)
+  USE SUBSURFACE_MODULE
+# endif
   IMPLICIT NONE
 !  for adv-dif
 !  free-slip bc
@@ -872,6 +1026,7 @@ SUBROUTINE FILLIN_BOUNDARY_GHOST
    P(I,J)=P(Ibeg,J)
    U(I,J)=U(Ibeg,J)
    H_u(I,J)=H_u(Ibeg,J)
+
   ENDDO
   ENDDO
 
@@ -881,6 +1036,7 @@ SUBROUTINE FILLIN_BOUNDARY_GHOST
    Q(I,J)=Q(Ibeg,J)
    V(I,J)=V(Ibeg,J)
    H_v(I,J)=H_v(Ibeg,J)
+
   ENDDO
   ENDDO
 
@@ -899,6 +1055,8 @@ SUBROUTINE FILLIN_BOUNDARY_GHOST
    P(I,J)=P(Iend1,J)
    U(I,J)=U(Iend1,J)
    H_u(I,J)=H_u(Iend1,J)
+
+
   ENDDO
   ENDDO
 
@@ -908,6 +1066,7 @@ SUBROUTINE FILLIN_BOUNDARY_GHOST
    Q(I,J)=Q(Iend,J)
    V(I,J)=V(Iend,J)
    H_v(I,J)=H_v(Iend,J)
+
   ENDDO
   ENDDO
 
@@ -926,6 +1085,7 @@ SUBROUTINE FILLIN_BOUNDARY_GHOST
    Q(I,J)=Q(I,Jbeg)
    V(I,J)=V(I,Jbeg)
    H_v(I,J)=H_v(I,Jbeg)
+
   ENDDO
   ENDDO
 
@@ -935,6 +1095,7 @@ SUBROUTINE FILLIN_BOUNDARY_GHOST
    P(I,J)=P(I,Jbeg)
    U(I,J)=U(I,Jbeg)
    H_u(I,J)=H_u(I,Jbeg)
+
   ENDDO
   ENDDO
 
@@ -953,6 +1114,7 @@ SUBROUTINE FILLIN_BOUNDARY_GHOST
    Q(I,J)=Q(I,Jend1)
    V(I,J)=V(I,Jend1)
    H_v(I,J)=H_v(I,Jend1)
+
   ENDDO
   ENDDO
 
@@ -962,6 +1124,7 @@ SUBROUTINE FILLIN_BOUNDARY_GHOST
    P(I,J)=P(I,Jend)
    U(I,J)=U(I,Jend)
    H_u(I,J)=H_u(I,Jend)
+
   ENDDO
   ENDDO
 
@@ -1065,7 +1228,6 @@ SUBROUTINE CALCULATE_ABC
    IF(OUT_RESIST_FORCE)THEN
     TotResistFX(I,J)=rho_w*FrcU*U(I,J)
    ENDIF
-
 
    IF(IMPLICIT)THEN
     A_u(I,J)=grav*H_u(I,J)*H_u(I,J)*DT &
@@ -2009,21 +2171,23 @@ SUBROUTINE HOPSCOTCH_SCHEME
 
 # if defined (SUBSURFACE) 
 ! $$$
+!                 IF(MASK(I,J)>0.AND.MASKu(I,J)==0)THEN
                  IF(MASK(I,J)>0.AND.MASKu(I,J)==0)THEN
                    incr1=incr1+DT/DX*P_ground(I,J)
                  ENDIF
+!                 IF(MASK(I,J)>0.AND.MASKu(I+1,J)==0)THEN
                  IF(MASK(I,J)>0.AND.MASKu(I+1,J)==0)THEN
                    incr1=incr1-DT/DX*P_ground(I+1,J)
                  ENDIF
+!                 IF(MASK(I,J)>0.AND.MASKv(I,J)==0)THEN
                  IF(MASK(I,J)>0.AND.MASKv(I,J)==0)THEN
                    incr1=incr1+DT/DY*Q_ground(I,J)
                  ENDIF
+!                 IF(MASK(I,J)>0.AND.MASKv(I,J+1)==0)THEN
                  IF(MASK(I,J)>0.AND.MASKv(I,J+1)==0)THEN
                    incr1=incr1+DT/DY*Q_ground(I,J+1)
                  ENDIF
-
 # endif
-
                  ETA(I,J)=ETA(I,J) + incr1/poro
 
   ENDDO
@@ -2153,7 +2317,7 @@ SUBROUTINE FILLIN_ETA_GHOST
 # endif
 
   DO J=1,Nloc
-  DO I=Iend+1,Mloc
+  DO I=Iend1,Mloc
    ETA(I,J)=ETA(Iend,J)
   ENDDO
   ENDDO
@@ -2182,7 +2346,7 @@ SUBROUTINE FILLIN_ETA_GHOST
  if( n_nrth .eq. MPI_PROC_NULL )then
 # endif
 
-  DO J=Jend+1,Nloc
+  DO J=Jend1,Nloc
   DO I=1,Mloc
    ETA(I,J)=ETA(I,Jend)
   ENDDO
@@ -2195,3 +2359,4 @@ SUBROUTINE FILLIN_ETA_GHOST
 END SUBROUTINE FILLIN_ETA_GHOST
 
 # endif
+

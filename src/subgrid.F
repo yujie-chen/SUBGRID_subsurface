@@ -2,9 +2,7 @@
 
 SUBROUTINE UPDATE_SUBGRID
      USE GLOBAL
-# if defined (SUBSURFACE)
-     USE SUBSURFACE_MODULE
-# endif
+
      IMPLICIT NONE
      REAL(SP) :: AvgEta,TmpEta,tmpv1,tmpv2,tmpv3,tmpv4
      INTEGER  :: Ktmp,tmpk1,tmpk2,pcount,pcount1,pcount2
@@ -242,42 +240,50 @@ SUBROUTINE UPDATE_SUBGRID
 END SUBROUTINE UPDATE_SUBGRID
 
 # endif
-
-
 SUBROUTINE SETUP_INITIAL_ETA_SUBGRID
      USE GLOBAL
+# if defined (SUBSURFACE)
+     USE SUBSURFACE_MODULE
+# endif
      IMPLICIT NONE
-     REAL(SP) :: tmpv1,tmpv2,depmax,hwater,avgeta
+     REAL(SP) :: tmpv1,tmpv2,depmax,avgeta !,hwater
      INTEGER :: pcount
-
-! get depth in coarse grid, depth_x and depth_y
+!!! get depth in coarse grid, depth_x and depth_y (where is used?)
 
      DO J=1,Nloc
      DO I=1,Mloc
        tmpv2=ZERO
        pcount=0
-       Porosity(I,J)=ZERO
+ !     Porosity(I,J)=ZERO
        depmax=-LARGE
        DO JJ=1,SubMainGridRatio
        DO II=1,SubMainGridRatio
-          tmpv1=Eta(I,J)+DepSubGrid(I,J,II,JJ)
-          IF(DepSubGrid(I,J,II,JJ).GT.depmax)  &
-            depmax=DepSubGrid(I,J,II,JJ)
-          IF(tmpv1.GT.ZERO)THEN
+         ! tmpv1=Eta(I,J)+DepSubGrid(I,J,II,JJ)
+         ! IF(DepSubGrid(I,J,II,JJ).GT.depmax) &
+         !   depmax=DepSubGrid(I,J,II,JJ)
+          IF(min(DepSubGrid(I,J,II,JJ),ImpSubGrid(I,J,II,JJ)).GT.depmax)  &
+            depmax=min(DepSubGrid(I,J,II,JJ),ImpSubGrid(I,J,II,JJ))
+             tmpv1=depmax
+           ! tmpv1=Eta(I,J)+depmax
+          IF(tmpv1.GT.-LARGE)THEN
             tmpv2=tmpv2+tmpv1
             pcount=pcount+1
           ENDIF
        ENDDO
        ENDDO
        IF(pcount==0)THEN
-# if defined (SUBSURFACE)
-          ETA(I,J) = -depmax
-# else
+!# if defined (SUBSURFACE)
+!          ETA(I,J) = -depmax
+!# else
 !          ETA(I,J)=-depmax-MinDepth
-          ETA(I,J) = -depmax
-# endif
-          EtaScreen(I,J) = -depmax
-          MASK(I,J) = 0
+!          ETA(I,J) = -depmax
+!# endif
+           EtaScreen(I,J) = -LARGE
+ !         MASK(I,J) = 0
+!Added by YUJIE CHEN  03-04-2019
+       ELSE
+          EtaScreen(I,J) = tmpv2/REAL(NumPixel)   !$$$
+!          MASK(I,J) = 1
        ENDIF
 
      ENDDO
@@ -285,7 +291,7 @@ SUBROUTINE SETUP_INITIAL_ETA_SUBGRID
 
 # if defined (PARALLEL)
     IF(myid == 0)THEN
-     WRITE(3,*)'setup initial subgrid eta completed'
+    WRITE(3,*)'setup initial subgrid eta completed'
     ENDIF
 # else
      WRITE(3,*)'setup initial subgrid eta completed'

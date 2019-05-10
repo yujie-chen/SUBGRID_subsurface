@@ -33,23 +33,18 @@ MODULE SUBSURFACE_MODULE
   LOGICAL :: OUT_MASK_GROUND = .FALSE.
   LOGICAL :: OUT_MASKu_GROUND = .FALSE.
   LOGICAL :: OUT_MASKv_GROUND = .FALSE.
-!Added by YUJIE CHEN
-  LOGICAL :: OUT_D_GROUND = .FALSE.
-  LOGICAL :: OUT_Du_GROUND = .FALSE.
-  LOGICAL :: OUT_Dv_GROUND = .FALSE.
-  LOGICAL :: OUT_Su_GROUND = .FALSE.
-  LOGICAL :: OUT_Sv_GROUND = .FALSE.
 
   REAL(SP):: PLOT_INTV_ground,PLOT_COUNT_ground
-  REAL(SP),DIMENSION(:,:),ALLOCATABLE::POROSITY_ground,ETA_ground,P_ground,Q_ground, &
+  REAL(SP),DIMENSION(:,:),ALLOCATABLE::PORO_ground,ETA_ground,P_ground,Q_ground, &
                          Du_ground,Su_ground,Dv_ground,Sv_ground,  &
-                         D_ground,  &  !Added by YUJIE CHEN
                          KAu_ground,KAv_ground,DepthX,DepthY, &
                          ETAu_ground,ETAv_ground,POROgrn
+  INTEGER, DIMENSION(:,:),ALLOCATABLE::MASK_ground,MASKu_ground,MASKv_ground
   REAL(SP) :: S_constant,KA_constant,POR_constant
 
-  REAL(SP),DIMENSION(:,:,:,:),ALLOCATABLE:: ImpSubGrid      !Added by YUJIE CHEN
-  INTEGER,DIMENSION(:,:),ALLOCATABLE :: MASK_GROUND, MASKu_GROUND, MASKv_ground
+  REAL(SP),DIMENSION(:,:,:,:),ALLOCATABLE:: ImpSubGrid    !Added by YUJIE CHEN
+
+ ! REAL(SP) :: MAXSU, MAXSV, MINSU, MINSV
 
 #if defined (PARALLEL)
   REAL(SP) :: myvar
@@ -93,12 +88,6 @@ SUBROUTINE SUBSURFACE_INITIAL
       CALL GET_LOGICAL_VAL(OUT_MASKu_GROUND,FILE_NAME,'MASKu_GROUND',line,ierr)
       CALL GET_LOGICAL_VAL(OUT_MASKv_GROUND,FILE_NAME,'MASKv_GROUND',line,ierr)
 
-! ADDED BY YUJIE CHEN 03-04-2019
-
-      CALL GET_LOGICAL_VAL(OUT_D_GROUND,FILE_NAME,'D_GROUND',line,ierr)
-      CALL GET_LOGICAL_VAL(OUT_Du_GROUND,FILE_NAME,'Du_GROUND',line,ierr)
-      CALL GET_LOGICAL_VAL(OUT_Dv_GROUND,FILE_NAME,'Dv_GROUND',line,ierr)
-
       CALL GET_Float_VAL(KA_constant,FILE_NAME,'Kappa',line,ierr)
       IF(ierr==1)THEN
         KA_constant = 0.01
@@ -114,8 +103,7 @@ SUBROUTINE SUBSURFACE_INITIAL
       ENDIF
 
 ! constant porosity
-! YUJIE CHEN, change POROSITY_GROUND to POROSITY_SOIL
-      CALL GET_Float_VAL(POR_constant,FILE_NAME,'POROSITY_SOIL',line,ierr)
+      CALL GET_Float_VAL(POR_constant,FILE_NAME,'POROSITY_GROUND',line,ierr)
       IF(ierr==1)THEN
         POR_constant = 0.3
 # if defined (PARALLEL)
@@ -186,11 +174,8 @@ SUBROUTINE SUBSURFACE_INITIAL
         CALL GetFile_Subgrid (IMPER_FILE,ImpSubGrid)
     ENDIF ! subgrid
 
-
-
 ! ALLOCATION
         ALLOCATE(ETA_ground(Mloc,Nloc),P_ground(Mloc1,Nloc),Q_ground(Mloc,Nloc1), &
-                 D_ground(Mloc,Nloc), POROSITY_GROUND(Mloc,Nloc), &   ! Added by YUJIE CHEN 03-04-2019
                  Du_ground(Mloc1,Nloc),Dv_ground(Mloc,Nloc1), &
                  Su_ground(Mloc1,Nloc),Sv_ground(Mloc,Nloc1), &
                  KAu_ground(Mloc1,Nloc),KAv_ground(Mloc,Nloc1), &
@@ -202,6 +187,12 @@ SUBROUTINE SUBSURFACE_INITIAL
 
 ! assign variables
 
+    MASKu_ground = 0
+    MASKv_ground = 0
+    MASK_ground = 0
+    ETA_ground = ZERO
+    ETAu_ground = ZERO
+    ETAv_ground = ZERO
     P_ground = ZERO
     Q_ground = ZERO
     Du_ground = ZERO
@@ -209,19 +200,6 @@ SUBROUTINE SUBSURFACE_INITIAL
     KAu_ground = KA_constant 
     KAv_ground = KA_constant
     POROgrn = POR_constant
-
-!    ETA_ground = ZERO
-!    ETAu_ground = ZERO
-!    ETAv_ground = ZERO
-
-! Added by YUJIE CHEN 03-04-2019
-
-    ETA_ground = ETA
-    D_ground = ZERO
-    MASKu_ground = ZERO
-    MASKv_ground = ZERO
-    MASK_ground = ZERO
-    POROSITY_GROUND = 0.0_SP
 
     IF(IMPER_TYPE(1:4)=='UNIF')THEN
         Su_ground = S_constant
@@ -232,7 +210,7 @@ SUBROUTINE SUBSURFACE_INITIAL
         CALL SETUP_S_UV
     ENDIF
 
-  !  CALL UPDATE_GROUND_MASK_ETA       ! ORIGINAL
+    CALL UPDATE_GROUND_MASK_ETA
 
 END SUBROUTINE SUBSURFACE_INITIAL
 
@@ -240,7 +218,6 @@ END SUBROUTINE SUBSURFACE_INITIAL
 
 SUBROUTINE UPDATE_GROUND_MASK_ETA
 
-   INTEGER::tmpd
 ! depthx and depthy
 ! update with time
      DepthX = H_u
@@ -266,45 +243,27 @@ SUBROUTINE UPDATE_GROUND_MASK_ETA
 
 ! thickness
 
-!    DO J=1,Nloc
-!    DO I=1,Mloc1
-!      tmpd = ZERO
-!      IF(MASKu(I,J) == ZERO)THEN
-!        tmpd = Su_ground(I,J) +ETAu_ground(I,J)
-!        IF(tmpd.GT.ZERO) THEN
-!           Du_ground(I,J)=tmpd
-!           MASKu_GROUND(I,J)=1
-!        ELSE
-!           Du_ground(I,J)=ZERO
-!           MASKu_GROUND(I,J)=ZERO
-!        ENDIF
-!      ELSE
-!        Du_ground(I,J) = Su_ground(I,J)-DepthX(I,J)
-!        MASKu_GROUND(I,J)=1
-!      ENDIF
-!    ENDDO
-!    ENDDO
+    DO J=1,Nloc
+    DO I=1,Mloc1
+      IF(MASKu(I,J) == 0)THEN
+        Du_ground(I,J) = Su_ground(I,J) +ETAu_ground(I,J)
+      ELSE
+        Du_ground(I,J) = Su_ground(I,J)-DepthX(I,J)
+      ENDIF
+    ENDDO
+    ENDDO
 
-!    DO J=1,Nloc1
-!    DO I=1,Mloc
-!      tmpd = ZERO
-!      IF(MASKv(I,J) == ZERO)THEN
-!        tmpd = Sv_ground(I,J) +ETAv_ground(I,J)
-!        IF(tmpd.GT.ZERO)THEN
-!           Dv_ground(I,J)=tmpd
-!           MASKv_GROUND(I,J)=1
-!        ELSE
-!           Dv_ground(I,J)=ZERO
-!           MASKv_GROUND(I,J)=ZERO
-!        ENDIF
-!      ELSE
-!        Dv_ground(I,J) = Sv_ground(I,J)-DepthY(I,J)
-!      ENDIF
-!    ENDDO
-!    ENDDO
+    DO J=1,Nloc1
+    DO I=1,Mloc
+      IF(MASKv(I,J) == 0)THEN
+        Dv_ground(I,J) = Sv_ground(I,J) +ETAv_ground(I,J)
+      ELSE
+        Dv_ground(I,J) = Sv_ground(I,J)-DepthY(I,J)
+      ENDIF
+    ENDDO
+    ENDDO
 
 END SUBROUTINE UPDATE_GROUND_MASK_ETA
-
 
 SUBROUTINE UPDATE_SUBSURFACE
   USE GLOBAL,ONLY : itmp1,itmp2,itmp3,itmp4,itmp5,SMALL
@@ -316,26 +275,15 @@ SUBROUTINE UPDATE_SUBSURFACE
 
      DO J=Jbeg,Jend
      DO I=Ibeg,Iend1
-        IF(MASK(I,J)==0 .AND.MASK_GROUND(I,J)==1 )THEN
-          P_ground(I,J) = - KAu_ground(I,J)*Du_ground(I,J) &
- !                   *(ETA_ground(I,J)-ETA_ground(I-1,J))/DX
-                   *(ETA(I,J)-ETA(I-1,J))/DX
-        ELSE
-          P_ground(I,J) = ZERO
-        ENDIF
-
+       P_ground(I,J) = - KAu_ground(I,J)*Du_ground(I,J) &
+                    *(ETA_ground(I,J)-ETA_ground(I-1,J))/DX
      ENDDO
      ENDDO
 
      DO J=Jbeg,Jend1
      DO I=Ibeg,Iend
-        IF(MASK(I,J)==0 .AND. MASK_GROUND(I,J)==1)THEN
-          Q_ground(I,J) = - KAv_ground(I,J)*Dv_ground(I,J) &
-!                    *(ETA_ground(I,J)-ETA_ground(I,J-1))/DY
-                    *(ETA(I,J)-ETA(I,J-1))/DY
-        ELSE
-          Q_ground(I,J) = ZERO
-        ENDIF
+       Q_ground(I,J) = - KAv_ground(I,J)*Dv_ground(I,J) &
+                    *(ETA_ground(I,J)-ETA_ground(I,J-1))/DY
      ENDDO
      ENDDO
 
@@ -347,31 +295,18 @@ SUBROUTINE UPDATE_SUBSURFACE
 
      DO J=Jbeg,Jend
      DO I=Ibeg,Iend
-!       IF(MASK(I,J)==0)THEN
-!          IF(MASK_GROUND(I,J)==1)THEN       ! Added By YUJIE CHEN   03-12-2019
-!              ETA_ground(I,J) = ETA_ground(I,J)  &
-!                  -1.0_SP/POROgrn(I,J)*((P_ground(I+1,J)-P_ground(I,J))*dt_over_dx  &
-!                   +(Q_ground(I,J+1)-Q_ground(I,J))*dt_over_dy)
-!          ELSE                              ! Added By YUJIE CHEN  03-12-2019
-!              ETA_ground(I,J) = 0
-!          ENDIF
-!       ELSE
-!         ETA_ground(I,J) = ETA(I,J)
-!       ENDIF
-
-!       IF(MASK(I,J)==0 .AND. MASK_GROUND(I,J)==1)THEN
-        IF(MASK(I,J)==0)THEN
-              ETA(I,J) = ETA(I,J)  &
-                  -1.0_SP/POROgrn(I,J)*((P_ground(I+1,J)-P_ground(I,J))*dt_over_dx  &
-                   +(Q_ground(I,J+1)-Q_ground(I,J))*dt_over_dy)
+       IF(MASK(I,J)==0)THEN
+         ETA_ground(I,J) = ETA_ground(I,J)  &
+              -1.0_SP/POROgrn(I,J)*((P_ground(I+1,J)-P_ground(I,J))*dt_over_dx  &
+              +(Q_ground(I,J+1)-Q_ground(I,J))*dt_over_dy)
+       ELSE
+         ETA_ground(I,J) = ETA(I,J)
        ENDIF
-
      ENDDO
      ENDDO
 
 # if defined (PARALLEL)
- !   CALL PHI_EXCH_1(ETA_ground)
-     CALL PHI_EXCH_1(ETA)
+     CALL PHI_EXCH_1(ETA_ground)
 # endif
 
     CALL FILLIN_GRN_GHOST
@@ -383,13 +318,12 @@ SUBROUTINE FILLIN_GRN_GHOST
 
 !	west
 #	if defined(PARALLEL)
-	if(	n_west .eq.	MPI_PROC_NULL)then
+	if(	n_west .eq.	MPI_PROC_NULL	)then
 #	endif
 
 		DO J=1,Nloc
 		DO I=1,Nghost
-!            ETA_ground(I,J) = ETA_ground(Ibeg,J)
-            ETA(I,J) = ETA(Ibeg,J)
+                        ETA_ground(I,J) = ETA_ground(Ibeg,J)
 			P_ground(I,J)=P_ground(Ibeg,J)
 			Du_ground(I,J)=Du_ground(Ibeg,J)
 		ENDDO
@@ -408,13 +342,12 @@ SUBROUTINE FILLIN_GRN_GHOST
 
 !	east
 #	if defined(PARALLEL)
-	if(	n_east .eq.	MPI_PROC_NULL)then
+	if(	n_east .eq.	MPI_PROC_NULL	)then
 #	endif
 
 		DO J=1,Nloc
 		DO I=Iend1+1,Mloc1
-!            ETA_ground(I-1,J) = ETA_ground(Iend,J)
-            ETA(I-1,J) = ETA(Iend,J)
+                        ETA_ground(I-1,J) = ETA_ground(Iend,J)
 			P_ground(I,J)=P_ground(Iend1,J)
 			Du_ground(I,J)=Du_ground(Iend1,J)
 		ENDDO
@@ -438,17 +371,16 @@ SUBROUTINE FILLIN_GRN_GHOST
 
 		DO J=1,Nghost
 		DO I=1,Mloc
-!            ETA_ground(I,J) = ETA_ground(I,Jbeg)
-            ETA(I,J) = ETA(I,Jbeg)
-			Q_ground(I,J) = Q_ground(I,Jbeg)
-			Dv_ground(I,J) = Dv_ground(I,Jbeg)
+                        ETA_ground(I,J) = ETA_ground(I,Jbeg)
+			Q_ground(I,J)=Q_ground(I,Jbeg)
+			Dv_ground(I,J)=Dv_ground(I,Jbeg)
 		ENDDO
 		ENDDO
 
 		DO J=1,Nghost
 		DO I=Ibeg,Iend1
-			P_ground(I,J) = P_ground(I,Jbeg)
-			Du_ground(I,J) = Du_ground(I,Jbeg)
+			P_ground(I,J)=P_ground(I,Jbeg)
+			Du_ground(I,J)=Du_ground(I,Jbeg)
 		ENDDO
 		ENDDO
 
@@ -463,8 +395,7 @@ SUBROUTINE FILLIN_GRN_GHOST
 
 		DO J=Jend1+1,Nloc1
 		DO I=1,Mloc
-!            ETA_ground(I,J-1) = ETA_ground(I,Jend)
-            ETA(I,J-1) = ETA(I,Jend)
+                        ETA_ground(I,J-1) = ETA_ground(I,Jend)
 			Q_ground(I,J)=Q_ground(I,Jend1)
 			Dv_ground(I,J)=Dv_ground(I,Jend1)
 		ENDDO
@@ -503,7 +434,7 @@ SUBROUTINE SETUP_S_UV
 !         east side
         tmpv2=tmpv2+ImpSubGrid(I,J,1,JJ)
         ENDDO  ! end submaingridratio
-        Su_ground(I,J)=0.5*(tmpv1/real(SubMainGridRatio)+tmpv2/real(SubMainGridRatio))
+      Su_ground(I,J)=0.5*(tmpv1/real(SubMainGridRatio)+tmpv2/real(SubMainGridRatio))
 
     ENDDO
     ENDDO
@@ -530,10 +461,21 @@ SUBROUTINE SETUP_S_UV
     CALL PHI_EXCH_3(Sv_ground)
 # endif
 
+
+!        MaxSU=MAXVAL(Su_ground(Ibeg:Iend1,Jbeg:Jend))
+!        MaxSV=MAXVAL(Sv_ground(Ibeg:Iend,Jbeg:Jend1))
+!        MinSU=MINVAL(Su_ground(Ibeg:Iend1,Jbeg:Jend))
+!        MinSV=MINVAL(Sv_ground(Ibeg:Iend,Jbeg:Jend1))
+!print log file
+!        WRITE(3,*) 'MaxSU:',MaxSU
+!        WRITE(3,*) 'MinSU:',MinSU
+!        WRITE(3,*) 'MaxSV:',MaxSV
+!        WRITE(3,*) 'MinSV:',MinSV
+
 END SUBROUTINE SETUP_S_UV
 
 
-!Added by YUJIE CHEN 03-04-2019
+!Added by YUJIE CHEN
 SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
 
      USE GLOBAL
@@ -543,77 +485,40 @@ SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
      INTEGER  :: Ktmp,tmpk1,tmpk2,pcount,pcount1,pcount2,&
                    tmpkg1,tmpkg2,pcountg,pcountg1,pcountg2
 
-    !     H0 = H
+     H0 = H
+     S0 = S
      DO J=1,Nloc
      DO I=1,Mloc
         tmpv2=ZERO
-        pcount=ZERO
-        Porosity(I,J)=ZERO
-        tmpvg2=ZERO
-        pcountg=ZERO
-        POROSITY_GROUND(I,J)=ZERO
 
+        pcount=0
+        Porosity(I,J)=ZERO
         DO JJ=1,SubMainGridRatio
         DO II=1,SubMainGridRatio
-
-          tmpv1=Eta(I,J)+min(DepSubGrid(I,J,II,JJ),ImpSubGrid(I,J,II,JJ))
-          tmpvg1=Eta(I,J)+ImpSubGrid(I,J,II,JJ)
-
-           IF(tmpv1 .GT.ZERO)THEN
-              tmpv2=tmpv2+tmpv1
-              pcount=pcount+1
-           ENDIF
-!$$$
-           IF(tmpvg1 .GT. ZERO .AND. ImpSubGrid(I,J,II,JJ).GT.DepSubGrid(I,J,II,JJ))THEN
-              IF(tmpv1 .GT. ZERO) THEN
-                 tmpvg1=ImpSubGrid(I,J,II,JJ)-DepSubGrid(I,J,II,JJ)
-              ENDIF
-              tmpvg2=tmpvg2+tmpvg1
-              pcountg=pcountg+1
-           ENDIF
-        ENDDO
-        ENDDO
-
-        IF(I==200 .AND. J==100)THEN
-           print*,'ETA=',Eta(I,J)
-           print*,'tmpv2=',tmpv2
-           print*,'tmpv1=',tmpv1
-!           print*,'ETAgrn=',Eta_ground(I,J)
-           print*,'tmpvg2=',tmpvg2
-           print*,'tmpvg1=',tmpvg1
-           print*,'ImpSubGrid:',ImpSubGrid(I,J,:,:)
-           print*,'DepSubGrid:',DepSubGrid(I,J,:,:)
+           tmpv1=Eta(I,J)+min(DepSubGrid(I,J,II,JJ),ImpSubGrid(I,J,II,JJ))
+        IF(tmpv1.GT.ZERO)THEN
+           tmpv2=tmpv2+tmpv1
+           pcount=pcount+1
         ENDIF
-
-        IF(pcount == ZERO)THEN
-           H(I,J) = ZERO
-           MASK(I,J)= ZERO
+        ENDDO
+        ENDDO
+        IF(pcount==0)THEN
+           H(I,J)=ZERO
+           MASK(I,J)=0
         ELSE
            H(I,J)=tmpv2/REAL(NumPixel)
            Porosity(I,J)=REAL(pcount)/REAL(NumPixel)
            MASK(I,J)=1
         ENDIF
-
-        IF(pcountg == ZERO)THEN
-           D_ground(I,J) = ZERO
-           MASK_GROUND(I,J) = ZERO
-        ELSE
-           D_ground(I,J) = tmpvg2/REAL(NumPixel)
-           POROSITY_GROUND(I,J) = REAL(pcountg)/REAL(NumPixel)
-           MASK_GROUND(I,J) = 1
-        ENDIF
-
     ENDDO
     ENDDO
 
 ! because mask is used when calculate h_u h_v 2016-01-17
 # if defined(PARALLEL)
         CALL PHI_INT_EXCH_1(MASK)
-        CALL PHI_INT_EXCH_1(MASK_GROUND)
 # endif
 
 ! get H_u, H_v
-! get Du_ground,Dv_ground
 ! percentage of area of sections respect to depthx,depthy
 ! west and east
     DO J=Jbeg,Jend
@@ -621,74 +526,33 @@ SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
 
         tmpv2=ZERO
         tmpv4=ZERO
-        pcount1=ZERO
-        pcount2=ZERO
+        pcount1=0
+        pcount2=0
 
-        tmpvg2=ZERO
-        tmpvg4=ZERO
-        pcountg1=ZERO
-        pcountg2=ZERO
-
-
-!!!!!Need to be modified by taking Eta_ground, Mask_ground into consideration
     AvgEta=0.5_SP*(Eta(MAX(1,I-1),J)+Eta(I,J))
     IF(MASK(I-1,J)==0.AND.MASK(I,J)==1)AvgEta=Eta(I,J)
     IF(MASK(I,J)==0.AND.MASK(I-1,J)==1)AvgEta=Eta(I-1,J)
     IF(MASK(I-1,J)==0.AND.MASK(I,J)==0)AvgEta=MIN(Eta(I-1,J),Eta(I,J))
 
-!   AvgEta=0.5_SP*(Eta_ground(MAX(1,I-1),J)+Eta_ground(I,J))
-!   IF(MASK(I-1,J)==0.AND.MASK(I,J)==1)AvgEta=Eta(I,J)
-!   IF(MASK(I,J)==0.AND.MASK(I-1,J)==1)AvgEta=Eta(I-1,J)
-!   IF(MASK(I-1,J)==0.AND.MASK(I,J)==0)AvgEta=MIN(Eta_ground(I-1,J),Eta_ground(I,J))
-
     DO JJ=1,SubMainGridRatio
 !         west side
-     tmpv1=AvgEta+min(DepSubGrid(I-1,J,SubMainGridRatio,JJ),&
-               ImpSubGrid(I-1,J,SubMainGridRatio,JJ))
-        IF (tmpv1 .GT.ZERO) THEN
+    tmpv1=AvgEta+min(DepSubGrid(I-1,J,SubMainGridRatio,JJ),ImpSubGrid(I-1,J,SubMainGridRatio,JJ))
+        IF (tmpv1.GT.ZERO) THEN
             tmpv2=tmpv2+tmpv1
             pcount1=pcount1+1
         ENDIF
-
-    tmpvg1=AvgEta+ImpSubGrid(I-1,J,SubMainGridRatio,JJ)
-       IF(tmpvg1 .GT.ZERO .AND. ImpSubGrid(I-1,J,SubMainGridRatio,JJ).GT. &
-                  DepSubGrid(I-1,J,SubMainGridRatio,JJ)) THEN
-          IF(tmpv1.GT.ZERO) THEN
-               tmpvg1= ImpSubGrid(I-1,J,SubMainGridRatio,JJ) &
-                  -DepSubGrid(I-1,J,SubMainGridRatio,JJ)
-          ENDIF
-          tmpvg2 = tmpvg2+tmpvg1
-          pcountg1 = pcountg1 +1
-       ENDIF
-
 !         east side
-    tmpv3 = AvgEta+min(DepSubGrid(I,J,1,JJ),ImpSubGrid(I,J,1,JJ))
-        IF (tmpv3 .GT.ZERO) THEN
+    tmpv3=AvgEta+min(DepSubGrid(I,J,1,JJ),ImpSubGrid(I,J,1,JJ))
+        IF (tmpv3.GT.ZERO) THEN
             tmpv4=tmpv4+tmpv3
             pcount2=pcount2+1
         ENDIF
-
-   tmpvg3 = AvgEta+ImpSubGrid(I,J,1,JJ)
-       IF(tmpvg3 .GT.ZERO .AND. ImpSubGrid(I,J,1,JJ).GT.DepSubGrid(I,J,1,JJ)) THEN
-         IF(tmpv3.GT.ZERO) THEN
-             tmpvg3=ImpSubGrid(I,J,1,JJ)-DepSubGrid(I,J,1,JJ)
-         ENDIF
-        tmpvg4=tmpvg4+tmpvg3
-        pcountg2=pcountg2+1
-    ENDIF
-
     ENDDO  ! end submaingridratio
 
-    IF(pcount1 .GT.ZERO.AND.pcount2 .GT.ZERO)THEN
+    IF(pcount1.GT.0.AND.pcount2.GT.0)THEN
         H_u(I,J)=0.5*(tmpv2/real(SubMainGridRatio)+tmpv4/real(SubMainGridRatio))
     ELSE
         H_u(I,J)=ZERO
-    ENDIF
-
-    IF(pcountg1 .GT.ZERO.AND.pcountg2 .GT.ZERO)THEN
-        Du_ground(I,J)=0.5*(tmpvg2/real(SubMainGridRatio)+tmpvg4/real(SubMainGridRatio))
-    ELSE
-        Du_ground(I,J)=ZERO
     ENDIF
 
     ENDDO
@@ -703,80 +567,38 @@ SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
         pcount1=0
         pcount2=0
 
-        tmpvg2=ZERO
-        tmpvg4=ZERO
-        pcountg1=0
-        pcountg2=0
-
     AvgEta=0.5_SP*(Eta(I,MAX(1,J-1))+Eta(I,J))
     IF(MASK(I,J-1)==0.AND.MASK(I,J)==1)AvgEta=Eta(I,J)
     IF(MASK(I,J)==0.AND.MASK(I,J-1)==1)AvgEta=Eta(I,J-1)
     IF(MASK(I,J-1)==0.AND.MASK(I,J)==0)AvgEta=MIN(Eta(I,MAX(1,J-1)),Eta(I,J))
 
-!    AvgEta=0.5_SP*(Eta_ground(I,MAX(1,J-1))+Eta_ground(I,J))
-!    IF(MASK(I,J-1)==0.AND.MASK(I,J)==1)AvgEta=Eta(I,J)
-!    IF(MASK(I,J)==0.AND.MASK(I,J-1)==1)AvgEta=Eta(I,J-1)
-!    IF(MASK(I,J-1)==0.AND.MASK(I,J)==0)AvgEta=MIN(Eta_ground(I,MAX(1,J-1)),Eta_ground(I,J))
-
-
     DO II=1,SubMainGridRatio
 !         south side
         tmpv1=avgeta+min(DepSubGrid(I,J-1,II,SubMainGridRatio),ImpSubGrid(I,J-1,II,SubMainGridRatio))
-        IF (tmpv1 .GT.ZERO) THEN
+        IF (tmpv1.GT.ZERO) THEN
             tmpv2=tmpv2+tmpv1
             pcount1=pcount1+1
         ENDIF
-
-       tmpvg1 = AvgEta+ ImpSubGrid(I,J-1,II,SubMainGridRatio)
-       IF(tmpvg1 .GT.ZERO .AND. ImpSubGrid(I,J-1,II,SubMainGridRatio) &
-                         .GT. DepSubGrid(I,J-1,II,SubMainGridRatio))THEN
-         IF(tmpv1 .GT.ZERO)THEN
-                 tmpvg1= ImpSubGrid(I,J-1,II,SubMainGridRatio) - &
-                            DepSubGrid(I,J-1,II,SubMainGridRatio)
-         ENDIF
-            tmpvg2 = tmpvg2 + tmpvg1
-            pcountg1 = pcountg1 + 1
-       ENDIF
-
 !         north side
         tmpv3=avgeta+min(DepSubGrid(I,J,II,1),ImpSubGrid(I,J,II,1))
-        IF (tmpv3 .GT.ZERO) THEN
+        IF (tmpv3.GT.ZERO) THEN
             tmpv4=tmpv4+tmpv3
             pcount2=pcount2+1
         ENDIF
-
-       tmpvg3=avgeta+ImpSubGrid(I,J,II,1)
-       IF(tmpvg3 .GT.ZERO .AND. ImpSubGrid(I,J,II,1).GT.DepSubGrid(I,J,II,1))THEN
-         IF(tmpv3 .GT.ZERO) THEN
-            tmpvg3=ImpSubGrid(I,J,II,1)-DepSubGrid(I,J,II,1)
-         ENDIF
-       tmpvg4=tmpvg4+tmpvg3
-       pcountg2=pcountg2+1
-       ENDIF
-
     ENDDO  ! end submaingridratio
 
-    IF(pcount1 .GT.ZERO.AND.pcount2 .GT.ZERO)THEN
+    IF(pcount1.GT.0.AND.pcount2.GT.0)THEN
         H_v(I,J)=0.5*(tmpv2/real(SubMainGridRatio)+tmpv4/real(SubMainGridRatio))
     ELSE
         H_v(I,J)=ZERO
     ENDIF
 
-    IF(pcountg1 .GT.ZERO.AND.pcountg2 .GT.ZERO)THEN
-        Dv_ground(I,J)=0.5*(tmpvg2/real(SubMainGridRatio)+tmpvg4/real(SubMainGridRatio))
-    ELSE
-        Dv_ground(I,J)=ZERO
-    ENDIF
-
     ENDDO
     ENDDO
-
 
 # if defined (PARALLEL)
     CALL PHI_EXCH_2(H_u)
     CALL PHI_EXCH_3(H_v)
-    CALL PHI_EXCH_2(Du_ground)
-    CALL PHI_EXCH_3(Du_ground)
 # endif
 
 
@@ -789,6 +611,8 @@ SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
     WRITE(3,*)'Subroutine update_subgrid'
 # endif
 # endif
+
+
 
 END SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
 

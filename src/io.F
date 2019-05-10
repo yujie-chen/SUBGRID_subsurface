@@ -264,6 +264,7 @@ SUBROUTINE READ_INPUT
 # else
         WRITE(3,'(A22,I3)')'FileNumber_HOTSTART:', FileNumber_HOTSTART
 # endif
+
       IF(FileNumber_HOTSTART==1)THEN
       CALL GET_STRING_VAL(ETA_FILE, FILE_NAME,'ETA_FILE',line,ierr)
 # if defined (PARALLEL)
@@ -1041,6 +1042,9 @@ SUBROUTINE READ_INPUT
       CALL GET_LOGICAL_VAL(OUT_RESIST_FORCE,FILE_NAME,'RESIST_FORCE',line,ierr)
       CALL GET_LOGICAL_VAL(OUT_TMP,FILE_NAME,'TMP',line,ierr)
 
+! Added by YUJIE CHEN 03-04-2019
+      CALL GET_LOGICAL_VAL(OUT_TMP,FILE_NAME,'TMP',line,ierr)
+
 !
 # if defined (PARALLEL)
       if (myid.eq.0) WRITE(3,*)' --------------input end --------------'
@@ -1336,24 +1340,51 @@ SUBROUTINE PREVIEW
         call PutFile(TMP_NAME,Q_ground,Mloc,Nloc1)
      ENDIF
 
-!     IF(OUT_MASK_GROUND)THEN
-!        TMP_NAME = TRIM(FDIR)//'maskgro_'//TRIM(FILE_NAME)
-!        Int2Flo(1:Mloc,1:Nloc)=MASK_GROUND(1:Mloc,1:Nloc)
-!        call PutFile(TMP_NAME,Int2Flo(1:Mloc,1:Nloc),Mloc,Nloc)
-!     ENDIF
+! ADDED BY YUJIE CHEN 03-04-2019
+     IF(OUT_MASK_GROUND)THEN
+        TMP_NAME = TRIM(FDIR)//'maskgrn_'//TRIM(FILE_NAME)
+        Int2Flo(1:Mloc,1:Nloc)=MASK_GROUND(1:Mloc,1:Nloc)
+        call PutFile(TMP_NAME,Int2Flo(1:Mloc,1:Nloc),Mloc,Nloc)
+     ENDIF
 
-!     IF(OUT_MASKu_GROUND)THEN
-!        TMP_NAME = TRIM(FDIR)//'maskugrn_'//TRIM(FILE_NAME)
-!        Int2Flo(1:Mloc1,1:Nloc)=MASKu_GROUND(1:Mloc1,1:Nloc)
-!        call PutFile(TMP_NAME,Int2Flo(1:Mloc1,1:Nloc),Mloc1,Nloc)
-!     ENDIF
+     IF(OUT_MASKu_GROUND)THEN
+        TMP_NAME = TRIM(FDIR)//'maskugrn_'//TRIM(FILE_NAME)
+        Int2Flo(1:Mloc1,1:Nloc)=MASKu_GROUND(1:Mloc1,1:Nloc)
+        call PutFile(TMP_NAME,Int2Flo(1:Mloc1,1:Nloc),Mloc1,Nloc)
+     ENDIF
 
-!     IF(OUT_MASKv_GROUND)THEN
-!        TMP_NAME = TRIM(FDIR)//'maskvgrn_'//TRIM(FILE_NAME)
-!        Int2Flo(1:Mloc,1:Nloc1)=MASKv_GROUND(1:Mloc,1:Nloc1)
-!        call PutFile(TMP_NAME,Int2Flo(1:Mloc,1:Nloc1),Mloc,Nloc1)
-!     ENDIF
+     IF(OUT_MASKv_GROUND)THEN
+        TMP_NAME = TRIM(FDIR)//'maskvgrn_'//TRIM(FILE_NAME)
+        Int2Flo(1:Mloc,1:Nloc1)=MASKv_GROUND(1:Mloc,1:Nloc1)
+        call PutFile(TMP_NAME,Int2Flo(1:Mloc,1:Nloc1),Mloc,Nloc1)
+     ENDIF
 
+     IF(OUT_D_GROUND)THEN
+          TMP_NAME = TRIM(FDIR)//'Dgrn_'//TRIM(FILE_NAME)
+          Int2Flo(1:Mloc,1:Nloc)=D_GROUND(1:Mloc,1:Nloc)
+          call PutFile(TMP_NAME,Int2Flo(1:Mloc,1:Nloc),Mloc,Nloc)
+
+TMP_NAME = TRIM(FDIR)//'Etascreen_'//TRIM(FILE_NAME)
+Int2Flo(1:Mloc,1:Nloc)=EtaScreen(1:Mloc,1:Nloc)
+call PutFile(TMP_NAME,Int2Flo(1:Mloc,1:Nloc),Mloc,Nloc)
+
+
+          TMP_NAME = TRIM(FDIR)//'POROgrn_'//TRIM(FILE_NAME)
+          Int2Flo(1:Mloc1,1:Nloc)=POROSITY_GROUND(1:Mloc1,1:Nloc)
+          call PutFile(TMP_NAME,Int2Flo(1:Mloc1,1:Nloc),Mloc1,Nloc)
+     ENDIF
+
+     IF(OUT_Du_GROUND)THEN
+          TMP_NAME = TRIM(FDIR)//'Dugrn_'//TRIM(FILE_NAME)
+          Int2Flo(1:Mloc1,1:Nloc)=Du_GROUND(1:Mloc1,1:Nloc)
+          call PutFile(TMP_NAME,Int2Flo(1:Mloc1,1:Nloc),Mloc1,Nloc)
+     ENDIF
+
+     IF(OUT_Dv_GROUND)THEN
+          TMP_NAME = TRIM(FDIR)//'Dvgrn_'//TRIM(FILE_NAME)
+          Int2Flo(1:Mloc,1:Nloc1)=Dv_GROUND(1:Mloc,1:Nloc1)
+          call PutFile(TMP_NAME,Int2Flo(1:Mloc,1:Nloc1),Mloc,Nloc1)
+     ENDIF
 
 # endif
 ! end subsurface
@@ -1757,15 +1788,16 @@ SUBROUTINE PutFile(FILE,PHI,M,N)
      ENDIF
 
         OPEN(1,FILE=TRIM(FILE))
-# if defined (DEBUG)
+!# if defined (DEBUG)
         DO J=1,N
            WRITE(1,100)(real(PHI(I,J)),I=1,M)
         ENDDO
-# else
-        DO J=Nghost+1,Nloc-Nghost,OUTPUT_RES
-           WRITE(1,FORMAT_LEN)(real(PHI(I,J)),I=Nghost+1,Mloc-Nghost,OUTPUT_RES)
-        ENDDO
-# endif
+!$$$$
+!# else
+!        DO J=Nghost+1,Nloc-Nghost,OUTPUT_RES
+!           WRITE(1,FORMAT_LEN)(real(PHI(I,J)),I=Nghost+1,Mloc-Nghost,OUTPUT_RES)
+!        ENDDO
+!# endif
 100  FORMAT(5000E16.6)
 !100   FORMAT(FORMAT_LEN)
         CLOSE(1)

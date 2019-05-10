@@ -1,6 +1,10 @@
 SUBROUTINE INITIALIZATION
     USE GLOBAL
     USE Input_Util
+# if defined(SUBSURFACE)
+!Added by YUJIE CHEN
+    USE SUBSURFACE_MODULE
+# endif
     IMPLICIT NONE
     REAL(SP) :: Hx,Ux,Hy,Uy
 # if defined (PARALLEL)
@@ -34,7 +38,7 @@ SUBROUTINE INITIALIZATION
                 UcSubGrid(Mloc,Nloc,SubMainGridRatio,SubMainGridRatio),&
                 VcSubGrid(Mloc,Nloc,SubMainGridRatio,SubMainGridRatio),&
                 CdSubGrid(Mloc,Nloc,SubMainGridRatio,SubMainGridRatio),&
-                CdPixel(SubMainGridRatio,SubMainGridRatio) )
+                CdPixel(SubMainGridRatio,SubMainGridRatio))
 
       IF(MANNING_TYPE=='SUBGRID')THEN
         ALLOCATE(ManningSubGrid(Mloc,Nloc,SubMainGridRatio,SubMainGridRatio))
@@ -105,7 +109,7 @@ SUBROUTINE INITIALIZATION
       
       IF(NONCOHESIVE)THEN
         ALLOCATE(QsedX(Mloc,Nloc,SubMainGridRatio,SubMainGridRatio), &
-                 QsedY(Mloc,Nloc,SubMainGridRatio,SubMainGridRatio) )
+                 QsedY(Mloc,Nloc,SubMainGridRatio,SubMainGridRatio))
         IF(UPDATE_BED)THEN
          ALLOCATE(BedLevel(SubMainGridRatio+2,SubMainGridRatio+2), &
                  QXcenter(SubMainGridRatio+2,SubMainGridRatio+2), &
@@ -113,10 +117,10 @@ SUBROUTINE INITIALIZATION
                  UScenter(SubMainGridRatio+2,SubMainGridRatio+2), &
                  VScenter(SubMainGridRatio+2,SubMainGridRatio+2), &
                  QsedU(SubMainGridRatio+1,SubMainGridRatio+1),    &
-                 QsedV(SubMainGridRatio+1,SubMainGridRatio+1) )
+                 QsedV(SubMainGridRatio+1,SubMainGridRatio+1))
          IF(SubMainGridRatio==1)THEN
            ALLOCATE(VelMagU(Mloc1,Nloc),VelMagV(Mloc,Nloc1), &
-                    Q_LR(Mloc1,Nloc),Q_UD(Mloc,Nloc1) )
+                    Q_LR(Mloc1,Nloc),Q_UD(Mloc,Nloc1))
          ENDIF
         ENDIF
       ENDIF
@@ -142,9 +146,9 @@ SUBROUTINE INITIALIZATION
 
     P=ZERO
     Q=ZERO
-    U=ZERO
-    V=ZERO
-!   Eta=ZERO
+ !   U=ZERO
+ !   V=ZERO
+ !  Eta=ZERO
     EtaScreen=ZERO
     A_u=ZERO
     A_v=ZERO
@@ -153,8 +157,7 @@ SUBROUTINE INITIALIZATION
     MASK = 1
     MASKu = 1
     MASKv = 1
-    POROSITY = 1.0_SP
-
+    POROSITY = 0.0_SP
 
 ! Added by Yujie CHEN
     IF(HOT_START)THEN
@@ -167,6 +170,8 @@ SUBROUTINE INITIALIZATION
             CALL GETFILE(U_FILE,U)
             CALL GETFILE(V_FILE,V)
         ENDIF
+    CALL FILLIN_ETA_GHOST  !Added by YUJIE CHEN 03-06-2019
+
     ELSE
         Eta = ZERO
         U = ZERO
@@ -193,10 +198,10 @@ SUBROUTINE INITIALIZATION
 !    ETA(25,25)=1.0
 !# endif
 
-
     Cdu = Cd_fixed
     Cdv = Cd_fixed
     Cori = ZERO
+
 
 ! read vegetation
 # if defined(VEGETATION)
@@ -248,7 +253,7 @@ SUBROUTINE INITIALIZATION
 # if defined (SUBGRID)
    CALL GetFile_Subgrid (DEPTH_FILE,DepSubGrid)
    IF(MANNING_TYPE=='SUBGRID')THEN
-     CALL GetFile_Subgrid (MANNINGSUBGRID_FILE,ManningSubGrid)
+   CALL GetFile_Subgrid (MANNINGSUBGRID_FILE,ManningSubGrid)
 
 # if defined (DEBUG)
 #    if defined (PARALLEL)
@@ -257,8 +262,12 @@ SUBROUTINE INITIALIZATION
        WRITE(*,*) 'INITILIZATION: manning'
 #    endif
 # endif
+       ENDIF
 
-   ENDIF
+!ADDED BY YUJIE CHEN 03-04-2019
+# if defined (SUBSURFACE)
+     CALL SUBSURFACE_INITIAL
+# endif
 
 # if defined (INTERPOLATION)
      CALL INTERPOLATE_POROSITY
@@ -271,6 +280,7 @@ SUBROUTINE INITIALIZATION
        WRITE(*,*) 'INITILIZATION: interp porosity/friction'
 #    endif
 # endif
+
 # endif
 
 # if defined (POLY_FRICTION)
@@ -297,7 +307,13 @@ SUBROUTINE INITIALIZATION
 
 # endif
 
+     CALL SETUP_INITIAL_ETA_SUBGRID      ! MODIFIED BY YUJIE CHEN 03-04-2019
+
+# if defined (SUBSURFACE)
+     CALL UPDATE_SUBGRID_SUBSURFACE
+# else
      CALL UPDATE_SUBGRID
+# endif
 
 # if defined (DEBUG)
 #    if defined (PARALLEL)
@@ -307,7 +323,7 @@ SUBROUTINE INITIALIZATION
 #    endif
 # endif
 
-     CALL SETUP_INITIAL_ETA_SUBGRID
+!     CALL SETUP_INITIAL_ETA_SUBGRID      !ORIGINAL
 
 # if defined (DEBUG)
 #    if defined (PARALLEL)
@@ -370,6 +386,7 @@ SUBROUTINE INITIALIZATION
     dt_over_dy2 = DT/DY/DY
 
     CALL INIT_BOUNDARY_CONDITIONS
+
 
 # if defined (DEBUG)
 #    if defined (PARALLEL)
