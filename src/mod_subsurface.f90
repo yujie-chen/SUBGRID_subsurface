@@ -2,7 +2,7 @@
 ! Subsurface module
 !------------------------------------
 
-# if defined (SUBSURFACE)
+
 
 MODULE SUBSURFACE_MODULE
   USE PARAM
@@ -17,10 +17,10 @@ MODULE SUBSURFACE_MODULE
                     dt_over_dx,dt_over_dy,TIME
                  
   USE INPUT_Util
-#if defined (PARALLEL)
-  USE GLOBAL,ONLY : myid,ier, npx,npy,PX,PY,n_west,n_east,n_suth,n_nrth
-  USE MPI
-# endif
+
+
+
+
   IMPLICIT NONE
   SAVE
 
@@ -51,9 +51,9 @@ MODULE SUBSURFACE_MODULE
   REAL(SP),DIMENSION(:,:,:,:),ALLOCATABLE:: ImpSubGrid      !Added by YUJIE CHEN
   INTEGER,DIMENSION(:,:),ALLOCATABLE :: MASK_GROUND, MASKu_GROUND, MASKv_ground
 
-#if defined (PARALLEL)
-  REAL(SP) :: myvar
-# endif 
+
+
+
 
 CONTAINS
 
@@ -75,15 +75,15 @@ SUBROUTINE SUBSURFACE_INITIAL
 
       IF(ierr==1)THEN
         SATUATION = .TRUE.
-# if defined (PARALLEL)
-      if (myid.eq.0) THEN
+
+
+
+
+
+
          WRITE(*,'(A80)')'No SATUATION defined, USE defalt: TRUE'
          WRITE(3,'(A80)')'No SATUATION defined, USE defalt: TRUE'
-      endif
-# else
-         WRITE(*,'(A80)')'No SATUATION defined, USE defalt: TRUE'
-         WRITE(3,'(A80)')'No SATUATION defined, USE defalt: TRUE'
-# endif
+
        ENDIF
 
       CALL GET_LOGICAL_VAL(OUT_P_GROUND,FILE_NAME,'P_GROUND',line,ierr)
@@ -102,15 +102,15 @@ SUBROUTINE SUBSURFACE_INITIAL
       CALL GET_Float_VAL(KA_constant,FILE_NAME,'Kappa',line,ierr)
       IF(ierr==1)THEN
         KA_constant = 0.01
-# if defined (PARALLEL)
-      if (myid.eq.0) THEN
+
+
+
+
+
+
          WRITE(*,'(A80)')'Kappa: Use default,', '0.01'
          WRITE(3,'(A80)')'Kappa: Use default,', '0.01'
-      endif
-# else
-         WRITE(*,'(A80)')'Kappa: Use default,', '0.01'
-         WRITE(3,'(A80)')'Kappa: Use default,', '0.01'
-# endif
+
       ENDIF
 
 ! constant porosity
@@ -118,46 +118,46 @@ SUBROUTINE SUBSURFACE_INITIAL
       CALL GET_Float_VAL(POR_constant,FILE_NAME,'POROSITY_SOIL',line,ierr)
       IF(ierr==1)THEN
         POR_constant = 0.3
-# if defined (PARALLEL)
-      if (myid.eq.0) THEN
+
+
+
+
+
+
          WRITE(*,'(A80)')'POROgrn: Use default,', '0.3'
          WRITE(3,'(A80)')'POROgrn: Use default,', '0.3'
-      endif
-# else
-         WRITE(*,'(A80)')'POROgrn: Use default,', '0.3'
-         WRITE(3,'(A80)')'POROgrn: Use default,', '0.3'
-# endif
+
       ENDIF
 
 !!!!!!!!!!!Added by YUJIECHEN!!!!!!
       CALL GET_STRING_VAL(IMPER_TYPE,FILE_NAME,'IMPER_TYPE',line,ierr)
-!     IMPER_TYPE: UNIFORM/VARY/SUBGRID
+!     IMPER_TYPE: UNIFORM/VARY/1
       IF(ierr==1)THEN
             IMPER_TYPE = 'UNIFORM'
-# if defined (PARALLEL)
-      if (myid.eq.0) THEN
+
+
+
+
+
+
             WRITE(*,'(A40,A40)')'IMPER_TYPE: Use default,', 'UNIFORM'
             WRITE(3,'(A40,A40)')'IMPER_TYPE: Use default,', 'UNIFORM'
-      endif
-# else
-            WRITE(*,'(A40,A40)')'IMPER_TYPE: Use default,', 'UNIFORM'
-            WRITE(3,'(A40,A40)')'IMPER_TYPE: Use default,', 'UNIFORM'
-# endif
+
       ENDIF
 
     IF(IMPER_TYPE(1:4)=='UNIF')THEN
       CALL GET_Float_VAL(S_constant,FILE_NAME,'HardBottom',line,ierr)
       IF(ierr==1)THEN
         S_constant = MaxDepth
-# if defined (PARALLEL)
-      if (myid.eq.0) THEN
+
+
+
+
+
+
          WRITE(*,'(A80)')'S_constant: Use default,', 'MaxDepth'
          WRITE(3,'(A80)')'S_constant: Use default,', 'MaxDepth'
-      endif
-# else
-         WRITE(*,'(A80)')'S_constant: Use default,', 'MaxDepth'
-         WRITE(3,'(A80)')'S_constant: Use default,', 'MaxDepth'
-# endif
+
       ENDIF
          ImpSubGrid=S_constant
     ENDIF
@@ -165,23 +165,23 @@ SUBROUTINE SUBSURFACE_INITIAL
     IF(IMPER_TYPE(1:4)=='SUBG')THEN
         CALL GET_STRING_VAL(IMPER_FILE,FILE_NAME,'IMPER_FILE',line,ierr)
         IF(ierr==1)THEN
-# if defined (PARALLEL)
-    if (myid.eq.0) THEN
-        WRITE(*,'(A40,A40)')'IMPER_FILE:', 'NOT FOUND, STOP'
-        WRITE(3,'(A40,A40)')'IMPER_FILE:', 'NOT FOUND, STOP'
-    endif
-    call MPI_FINALIZE ( ier )
-# else
+
+
+
+
+
+
+
     WRITE(*,'(A40,A40)')'IMPER_FILE:', 'NOT FOUND, STOP'
     WRITE(3,'(A40,A40)')'IMPER_FILE:', 'NOT FOUND, STOP'
-# endif
+
     STOP
     ELSE
-# if defined (PARALLEL)
-    if (myid.eq.0) WRITE(3,'(A12,A50)')'IMPER_FILE:', IMPER_FILE
-# else
+
+
+
     WRITE(3,'(A12,A50)')'IMPER_FILE:', IMPER_FILE
-# endif
+
     ENDIF
         CALL GetFile_Subgrid (IMPER_FILE,ImpSubGrid)
     ENDIF ! subgrid
@@ -259,10 +259,10 @@ SUBROUTINE UPDATE_GROUND_MASK_ETA
    ENDDO
    ENDDO
 
-# if defined (PARALLEL)
-     CALL PHI_EXCH_2(ETAu_ground)
-     CALL PHI_EXCH_3(ETAv_ground)
-# endif
+
+
+
+
 
 ! thickness
 
@@ -344,10 +344,10 @@ SUBROUTINE UPDATE_SUBSURFACE
      ENDDO
      ENDDO
 
-# if defined (PARALLEL)
-     CALL PHI_EXCH_2(P_ground)
-     CALL PHI_EXCH_3(Q_ground)
-# endif     
+
+
+
+
 
 
      DO J=Jbeg,Jend
@@ -374,10 +374,10 @@ SUBROUTINE UPDATE_SUBSURFACE
      ENDDO
      ENDDO
 
-# if defined (PARALLEL)
- !   CALL PHI_EXCH_1(ETA_ground)
-     CALL PHI_EXCH_1(ETA)
-# endif
+
+
+
+
 
     CALL FILLIN_GRN_GHOST
 
@@ -387,9 +387,9 @@ END SUBROUTINE UPDATE_SUBSURFACE
 SUBROUTINE FILLIN_GRN_GHOST
 
 !	west
-#	if defined(PARALLEL)
-	if(	n_west .eq.	MPI_PROC_NULL)then
-#	endif
+
+
+
 
 		DO J=1,Nloc
 		DO I=1,Nghost
@@ -407,14 +407,14 @@ SUBROUTINE FILLIN_GRN_GHOST
 		ENDDO
 		ENDDO
 
-#	if defined(PARALLEL)
-	endif
-#	endif
+
+
+
 
 !	east
-#	if defined(PARALLEL)
-	if(	n_east .eq.	MPI_PROC_NULL)then
-#	endif
+
+
+
 
 		DO J=1,Nloc
 		DO I=Iend1+1,Mloc1
@@ -432,14 +432,14 @@ SUBROUTINE FILLIN_GRN_GHOST
 		ENDDO
 		ENDDO
 
-#	if defined(PARALLEL)
-	endif
-#	endif
+
+
+
 
 !	south
-#	if defined(PARALLEL)
-	if(	n_suth .eq.	MPI_PROC_NULL	)then
-#	endif
+
+
+
 
 		DO J=1,Nghost
 		DO I=1,Mloc
@@ -457,14 +457,14 @@ SUBROUTINE FILLIN_GRN_GHOST
 		ENDDO
 		ENDDO
 
-#	if defined(PARALLEL)
-	endif
-#	endif
+
+
+
 
 !	north
-#	if defined(PARALLEL)
-	if(	n_nrth .eq.	MPI_PROC_NULL	)then
-#	endif
+
+
+
 
 		DO J=Jend1+1,Nloc1
 		DO I=1,Mloc
@@ -482,9 +482,9 @@ SUBROUTINE FILLIN_GRN_GHOST
 		ENDDO
 		ENDDO
 
-#	if defined(PARALLEL)
-	endif
-#	endif
+
+
+
 
 END SUBROUTINE FILLIN_GRN_GHOST
 
@@ -530,10 +530,10 @@ SUBROUTINE SETUP_S_UV
     ENDDO
     ENDDO
 
-# if defined (PARALLEL)
-    CALL PHI_EXCH_2(Su_ground)
-    CALL PHI_EXCH_3(Sv_ground)
-# endif
+
+
+
+
 
 END SUBROUTINE SETUP_S_UV
 
@@ -612,10 +612,10 @@ SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
     ENDDO
 
 ! because mask is used when calculate h_u h_v 2016-01-17
-# if defined(PARALLEL)
-        CALL PHI_INT_EXCH_1(MASK)
-        CALL PHI_INT_EXCH_1(MASK_GROUND)
-# endif
+
+
+
+
 
 ! get H_u, H_v
 ! get Du_ground,Dv_ground
@@ -777,27 +777,20 @@ SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
     ENDDO
 
 
-# if defined (PARALLEL)
-    CALL PHI_EXCH_2(H_u)
-    CALL PHI_EXCH_3(H_v)
-    CALL PHI_EXCH_2(Du_ground)
-    CALL PHI_EXCH_3(Du_ground)
-# endif
 
 
-# if defined(DEBUG)
-# if defined (PARALLEL)
-    IF(myid == 0)THEN
-        WRITE(3,*)'Subroutine update_subgrid'
-    ENDIF
-# else
-    WRITE(3,*)'Subroutine update_subgrid'
-# endif
-# endif
+
+
+
+
+
+
+
 
 END SUBROUTINE UPDATE_SUBGRID_SUBSURFACE
 
 END MODULE SUBSURFACE_MODULE
-# endif
+
 ! end the module
+
 

@@ -1,0 +1,115 @@
+!INPUT FILE FOR SUBGRID MODEL
+  ! NOTE: all input parameter are capital sensitive
+  ! --------------------TITLE-------------------------------------
+  ! title only for log file
+TITLE = TEST RUN
+  ! -------------------HOT START---------------------------------
+HOT_START = T
+FileNumber_HOTSTART = 1
+ETA_FILE = input_file/eta0.txt
+!if =2
+U_FILE = input_file/u0.txt
+V_FILE = input_file/v0.txt
+
+  ! -------------------PARALLEL INFO-----------------------------
+  ! 
+  !    PX,PY - processor numbers in X and Y
+  !    NOTE: make sure consistency with mpirun -np n (px*py)
+  !    
+PX = 1
+PY = 1
+  ! --------------------DEPTH-------------------------------------
+SubMainGridRatio = 1
+DEPTH_FILE = input_file/stru.txt
+  ! -------------------PRINT---------------------------------
+  ! result folder
+RESULT_FOLDER =Output/
+  ! ------------------DIMENSION-----------------------------
+  ! global grid dimension
+Mglob = 400
+Nglob = 200
+  ! ----------------- TIME----------------------------------
+  ! time: total computational time/ plot time / screen interval 
+  ! all in seconds
+TOTAL_TIME = 1500.0
+PLOT_INTV = 5.0
+PLOT_INTV_STATION = 2.0
+SCREEN_INTV = 10.0
+  ! -----------------GRID----------------------------------
+DX = 1.0
+DY = 1.0
+  ! ---------------- PERIODIC BOUNDARY CONDITION ---------
+  ! South-North periodic boundary condition
+  !
+PERIODIC_X = F
+PERIODIC_Y = F
+  ! ----------------PHYSICS------------------------------
+  ! parameters to control type of equations
+Nonlinear = 0
+Cd_fixed = 0.002
+
+  ! ----------------NUMERICS----------------------------
+ADI = F
+HOPSCOTCH = T
+  ! CFL
+CFL = 0.5
+  ! Froude Number Cap (to avoid jumping drop, set 10)
+FroudeCap = 1.0
+
+TIDE_CLAMPED = F
+TIDE_FILE = tide_1bc.txt
+
+  ! --------------WET-DRY-------------------------------
+  ! MinDepth for wetting-drying
+MinDepth=0.01
+  ! ----------------- COUPLING -------------------------
+  ! if do coupling, have to set -DCOUPLING in Makefile
+COUPLING_FILE = coupling.txt
+  ! -----------------OUTPUT-----------------------------
+  ! stations 
+  ! if NumberStations>0, need input i,j in STATION_FILE
+NumberStations = 0
+STATIONS_FILE = gauges.txt
+  ! output variables, T=.TRUE, F = .FALSE.
+DEPTH_OUT = T
+U = T
+V = T
+ETA = T
+MASK = T
+P = T
+Q = T
+TMP = F
+!  -------- subsurface -----
+
+IMPER_TYPE = SUBGRID
+HARDBOTTOM= 2
+IMPER_FILE = input_file/impr.txt
+
+Kappa = 0.01
+POROSITY_SOIL = 0.3
+
+P_GROUND = T 
+Q_GROUND = T
+ETA_GROUND = T
+
+MASK_GROUND = T
+MASKu_GROUND = T
+MASKv_GROUND = T
+
+MASK = T
+MASKu = T
+MASKv = T
+
+D_GROUND = T
+Du_GROUND = T
+Dv_GROUND = T
+
+PORO = T
+
+
+!  ---------------------
+
+
+
+
+
